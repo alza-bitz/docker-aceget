@@ -1,0 +1,100 @@
+#!/usr/bin/expect -f
+
+#
+# Aceget: a command-line Ace Stream client
+#
+# params: hostname/ip port-number TORRENT/INFOHASH/PID/RAW/URL url/pid/whatever
+# - for media usage, see http://wiki.acestream.org/wiki/index.php/Engine_API/en
+# - incoming video data is pushed into stdout, so redirect to your media software of choice
+#
+
+
+#
+# Check dependencies, suppress all output
+#
+package require sha1
+log_user 0
+
+
+#
+# Configuration
+#
+if {[expr $argc < 4]} {
+	puts stderr "usage: aceget hostname/ip port-number TORRENT/INFOHASH/PID/RAW/URL url/pid/whatever"
+	exit -1
+}
+set address [lindex $argv 0]
+set port [lindex $argv 1]
+set type [lindex $argv 2]
+set pid [lindex $argv 3]
+
+set apiversion 3
+set apikey n51LvQoTlJzNGaFxseRK-uvnvX-sD4Vm5Axwmc4UcoD-jruxmKsuJaH0eVgE
+
+
+#
+# Script start
+#
+# Connect via telnet, set timeout at 10 sec
+#
+spawn telnet $address $port
+set timeout 10
+expect {
+	"Unable to connect to remote host" {puts stderr "aceget: telnet connection failed, wrong address/port?"; exit 1}
+	timeout {put stderr "aceget: telnet connection timed out, network error?"; exit 2}
+	"Connected to"
+}
+
+exit -onexit {
+	if [info exists spawn_id] {
+		send "STOP\r"
+		puts stderr "aceget: sent stop"
+		send "SHUTDOWN\r"
+		puts stderr "aceget: sent shutdown"
+		close
+		puts stderr "aceget: closed connection"
+	}
+}
+
+#
+# Shake hands and receive a challenge, then authenticate as per:
+# http://wiki.acestream.org/wiki/index.php/Product_key/en
+#
+send [format "HELLOBG version=%d\r" $apiversion]
+expect {
+	-re "HELLOTS.*key=(\[^ \]*).*" {set challenge $expect_out(1,string)}
+	timeout {puts stderr "aceget: handshake timed out, incompatible ace version?"; exit 3}
+}
+send [format "READY key=%s-%s\r" [exec sed s/-.*// <<$apikey] [::sha1::sha1 "$challenge$apikey"]]
+expect {
+	NOTREADY {puts stderr "aceget: authentication failed, wrong API key?"; exit 4}
+	timeout {puts stderr "aceget: authentication timed out, network error?"; exit 5}
+	AUTH
+}
+
+#
+# Request the given Acestream PID from the engine, timeout after 30 sec
+#
+set timeout 30
+send "START $type $pid 0\r"
+expect {
+	-re "START.*(http://\[^ \]*).*" {set videolink $expect_out(1,string)}
+	timeout {puts stderr "aceget: video request timed out, broadcast unavailable?"; exit 6}
+}
+
+#
+# Push incoming .TS data into stdout, but only if redirected off the console, otherwise show videolink on stdout
+#
+if {[dict exists [fconfigure stdout] -mode]} {
+	puts stdout "aceget: open $videolink (press ctrl+c to abort)"
+	interact {
+		\003 {puts stdout "aceget: caught ctrl+c"; return}
+		-o -re "(STATE|STATUS|EVENT|PAUSE|RESUME).*" {}
+	}
+} else {
+	catch {exec >@stdout 2>@stderr curl -s $videolink}
+}
+
+#
+# Cleanup
+#
