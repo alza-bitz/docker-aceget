@@ -41,7 +41,7 @@ spawn telnet $address $port
 set timeout 10
 expect {
 	"Unable to connect to remote host" {puts stderr "aceget: telnet connection failed, wrong address/port?"; exit 1}
-	timeout {put stderr "aceget: telnet connection timed out, network error?"; exit 2}
+	timeout {puts stderr "aceget: telnet connection timed out, network error?"; exit 2}
 	"Connected to"
 }
 
