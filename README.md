@@ -23,7 +23,7 @@ docker build --rm -t alzadude/aceget .
 ### Docker Pull
 
 ```
-docker pull alzadude/docker-aceget
+docker pull alzadude/aceget
 ```
 
 ## Usage
