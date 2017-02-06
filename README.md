@@ -30,7 +30,7 @@ docker pull alzadude/aceget
 
 ### With an Acestream PID:
 ```
-docker run -p 6878:6878 -i -t alzadude/aceget PID <acestream-pid>
+docker run --rm -p 6878:6878 -i -t alzadude/aceget PID <acestream-pid>
 ```
 Then open the displayed url in your favourite video player.
 Press `ctrl+c` to close the stream and quit.
